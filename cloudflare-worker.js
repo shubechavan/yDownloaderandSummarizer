@@ -1,5 +1,5 @@
 // ── YSummarize Transcript Proxy — Cloudflare Worker ──────────────────────────
-// Uses YouTube's InnerTube API (Android client) — not blocked like browser requests.
+// Uses YouTube InnerTube API with multiple client fallbacks.
 // Deploy at: https://dash.cloudflare.com → Workers & Pages → Create Worker
 
 export default {
@@ -15,70 +15,92 @@ export default {
     const videoId = extractVideoId(videoUrl);
     if (!videoId) return json({ error: "Invalid YouTube URL" }, 400);
 
-    try {
-      const transcript = await getTranscript(videoId);
-      return json({ transcript });
-    } catch (err) {
-      return json({ error: err.message || "Failed to fetch transcript" }, 500);
+    const errors = [];
+
+    // Try each client in order until one works
+    for (const client of CLIENTS) {
+      try {
+        const tracks = await getCaptionTracks(videoId, client);
+        if (!tracks || !tracks.length) continue;
+
+        const track =
+          tracks.find((t) => t.languageCode === "en" && !t.kind) ||
+          tracks.find((t) => t.languageCode === "en") ||
+          tracks[0];
+
+        const transcript = await fetchCaptionText(track.baseUrl);
+        if (transcript) return json({ transcript });
+      } catch (err) {
+        errors.push(`${client.clientName}: ${err.message}`);
+      }
     }
+
+    return json({ error: "No captions found. " + errors.join(" | ") }, 500);
   },
 };
 
-// ── Core: InnerTube API (YouTube Android client) ──────────────────────────────
-async function getTranscript(videoId) {
-  // Step 1: get caption track URLs from InnerTube /player endpoint
-  const playerRes = await fetch(
-    "https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent":
-          "com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip",
-        "X-YouTube-Client-Name": "3",
-        "X-YouTube-Client-Version": "17.31.35",
+// ── Client configurations ─────────────────────────────────────────────────────
+const CLIENTS = [
+  {
+    clientName: "TVHTML5",
+    clientVersion: "7.20240101.08.00",
+    userAgent: "Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1",
+    clientNameId: "7",
+  },
+  {
+    clientName: "WEB",
+    clientVersion: "2.20240101.00.00",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    clientNameId: "1",
+  },
+  {
+    clientName: "ANDROID",
+    clientVersion: "19.09.37",
+    userAgent: "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip",
+    clientNameId: "3",
+    androidSdkVersion: 30,
+  },
+];
+
+// ── Fetch caption tracks from InnerTube /player ───────────────────────────────
+async function getCaptionTracks(videoId, client) {
+  const body = {
+    videoId,
+    context: {
+      client: {
+        clientName: client.clientName,
+        clientVersion: client.clientVersion,
+        hl: "en",
+        gl: "US",
+        ...(client.androidSdkVersion ? { androidSdkVersion: client.androidSdkVersion } : {}),
       },
-      body: JSON.stringify({
-        videoId,
-        context: {
-          client: {
-            clientName: "ANDROID",
-            clientVersion: "17.31.35",
-            androidSdkVersion: 30,
-            hl: "en",
-            gl: "US",
-          },
-        },
-      }),
-    }
-  );
+    },
+  };
 
-  if (!playerRes.ok) {
-    throw new Error(`InnerTube API error: ${playerRes.status}`);
-  }
+  const res = await fetch("https://www.youtube.com/youtubei/v1/player", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": client.userAgent,
+      "X-YouTube-Client-Name": client.clientNameId,
+      "X-YouTube-Client-Version": client.clientVersion,
+    },
+    body: JSON.stringify(body),
+  });
 
-  const playerData = await playerRes.json();
-  const tracks =
-    playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  if (!tracks || !tracks.length) {
-    throw new Error(
-      "No captions found for this video. Try a video with subtitles or auto-generated captions enabled."
-    );
-  }
+  const data = await res.json();
+  return data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+}
 
-  // Prefer manual English → auto English → first available
-  const track =
-    tracks.find((t) => t.languageCode === "en" && !t.kind) ||
-    tracks.find((t) => t.languageCode === "en") ||
-    tracks[0];
+// ── Download & parse caption text ────────────────────────────────────────────
+async function fetchCaptionText(baseUrl) {
+  const res = await fetch(baseUrl + "&fmt=json3");
+  if (!res.ok) throw new Error("Caption download failed");
+  const data = await res.json();
 
-  // Step 2: fetch the actual timed-text in JSON format
-  const ttRes = await fetch(track.baseUrl + "&fmt=json3");
-  if (!ttRes.ok) throw new Error("Caption download failed.");
-  const ttData = await ttRes.json();
-
-  const text = (ttData.events || [])
+  const text = (data.events || [])
     .filter((e) => e.segs)
     .flatMap((e) => e.segs)
     .map((s) => (s.utf8 || "").replace(/\n/g, " "))
@@ -87,7 +109,7 @@ async function getTranscript(videoId) {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!text || text.length < 100) throw new Error("Transcript too short.");
+  if (!text || text.length < 100) throw new Error("Transcript too short");
   return text;
 }
 
