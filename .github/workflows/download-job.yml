@@ -10,14 +10,24 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Install yt-dlp
+      - name: Install tools
         run: |
           curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
             -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp
-          yt-dlp --version
+          sudo apt-get install -y ffmpeg jq
+          yt-dlp --version && ffmpeg -version | head -1
 
-      - name: Install ffmpeg
-        run: sudo apt-get install -y ffmpeg
+      - name: Write cookies file
+        env:
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
+        run: |
+          if [ -n "$YT_COOKIES" ]; then
+            echo "$YT_COOKIES" > cookies.txt
+            echo "Cookies file written ($(wc -l < cookies.txt) lines)"
+          else
+            echo "YT_COOKIES secret not set — downloading without cookies (may fail bot check)"
+            touch cookies.txt
+          fi
 
       - name: Download media
         id: dl
@@ -25,26 +35,67 @@ jobs:
           VIDEO_URL: ${{ github.event.client_payload.videoUrl }}
           DOWNLOAD_TYPE: ${{ github.event.client_payload.downloadType }}
         run: |
+          echo "Downloading: $VIDEO_URL (type=$DOWNLOAD_TYPE)"
+          COOKIES_ARG=""
+          if [ -s cookies.txt ]; then
+            COOKIES_ARG="--cookies cookies.txt"
+          fi
+
           if [ "$DOWNLOAD_TYPE" = "audio" ]; then
             yt-dlp -x --audio-format mp3 --audio-quality 0 \
-              --no-playlist --no-warnings -o "media.%(ext)s" "$VIDEO_URL"
+              --no-playlist --no-warnings \
+              $COOKIES_ARG \
+              -o "media.%(ext)s" "$VIDEO_URL"
             echo "file=media.mp3" >> $GITHUB_OUTPUT
             echo "ext=mp3"       >> $GITHUB_OUTPUT
           else
             yt-dlp \
               -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
               --merge-output-format mp4 \
-              --no-playlist --no-warnings -o "media.%(ext)s" "$VIDEO_URL"
+              --no-playlist --no-warnings \
+              $COOKIES_ARG \
+              -o "media.%(ext)s" "$VIDEO_URL"
             echo "file=media.mp4" >> $GITHUB_OUTPUT
             echo "ext=mp4"        >> $GITHUB_OUTPUT
           fi
+          ls -lh media.*
 
-      - name: Upload to transfer.sh
+      - name: Upload to file host
         id: upload
         run: |
           FILE="${{ steps.dl.outputs.file }}"
-          URL=$(curl -s --upload-file "$FILE" "https://transfer.sh/$FILE")
-          echo "url=$URL" >> $GITHUB_OUTPUT
+          UPLOAD_URL=""
+
+          # 1. Try 0x0.st (reliable, no account needed)
+          echo "Trying 0x0.st..."
+          UPLOAD_URL=$(curl -sf -F "file=@$FILE" https://0x0.st 2>/dev/null || true)
+          if echo "$UPLOAD_URL" | grep -qE '^https?://'; then
+            echo "Upload success via 0x0.st: $UPLOAD_URL"
+            echo "url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 2. Try transfer.sh
+          echo "Trying transfer.sh..."
+          UPLOAD_URL=$(curl -sf --upload-file "$FILE" "https://transfer.sh/$FILE" 2>/dev/null || true)
+          if echo "$UPLOAD_URL" | grep -qE '^https?://'; then
+            echo "Upload success via transfer.sh: $UPLOAD_URL"
+            echo "url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 3. Try litterbox.catbox.moe (72h expiry)
+          echo "Trying litterbox.catbox.moe..."
+          UPLOAD_URL=$(curl -sf -F "reqtype=fileupload" -F "time=72h" -F "fileToUpload=@$FILE" \
+            https://litterbox.catbox.moe/resources/internals/api.php 2>/dev/null || true)
+          if echo "$UPLOAD_URL" | grep -qE '^https?://'; then
+            echo "Upload success via litterbox: $UPLOAD_URL"
+            echo "url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "All upload services failed"
+          exit 1
 
       - name: Callback — success
         if: success()
@@ -52,16 +103,23 @@ jobs:
           JOB_ID:          ${{ github.event.client_payload.jobId }}
           CALLBACK_URL:    ${{ github.event.client_payload.callbackUrl }}
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+          DOWNLOAD_URL:    ${{ steps.upload.outputs.url }}
+          EXT:             ${{ steps.dl.outputs.ext }}
         run: |
+          echo "Sending success callback to $CALLBACK_URL for job $JOB_ID"
+          PAYLOAD=$(jq -n \
+            --arg jobId "$JOB_ID" \
+            --arg status "done" \
+            --arg downloadUrl "$DOWNLOAD_URL" \
+            --arg ext "$EXT" \
+            '{jobId: $jobId, status: $status, downloadUrl: $downloadUrl, ext: $ext}')
+          echo "Payload: $PAYLOAD"
           curl -sf -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
             -H "X-Callback-Secret: $CALLBACK_SECRET" \
-            -d "{
-              \"jobId\": \"$JOB_ID\",
-              \"status\": \"done\",
-              \"downloadUrl\": \"${{ steps.upload.outputs.url }}\",
-              \"ext\": \"${{ steps.dl.outputs.ext }}\"
-            }"
+            -d "$PAYLOAD" \
+            && echo "Callback delivered OK" \
+            || echo "WARNING: Callback delivery failed (status=$?)"
 
       - name: Callback — failure
         if: failure()
@@ -70,8 +128,14 @@ jobs:
           CALLBACK_URL:    ${{ github.event.client_payload.callbackUrl }}
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
         run: |
+          echo "Sending failure callback to $CALLBACK_URL for job $JOB_ID"
+          PAYLOAD=$(jq -n \
+            --arg jobId "$JOB_ID" \
+            --arg status "failed" \
+            --arg error "Download failed — YouTube bot check. Add YT_COOKIES secret to fix." \
+            '{jobId: $jobId, status: $status, error: $error}')
           curl -sf -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
             -H "X-Callback-Secret: $CALLBACK_SECRET" \
-            -d "{\"jobId\": \"$JOB_ID\", \"status\": \"failed\", \"error\": \"Download or upload failed\"}" \
+            -d "$PAYLOAD" \
             || true
