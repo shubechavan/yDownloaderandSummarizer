@@ -46,17 +46,21 @@ jobs:
               --no-playlist --no-warnings \
               $COOKIES_ARG \
               -o "media.%(ext)s" "$VIDEO_URL"
-            echo "file=media.mp3" >> $GITHUB_OUTPUT
-            echo "ext=mp3"       >> $GITHUB_OUTPUT
+            FILE=$(ls media.* 2>/dev/null | head -1)
+            echo "file=$FILE"  >> $GITHUB_OUTPUT
+            echo "ext=mp3"     >> $GITHUB_OUTPUT
           else
             yt-dlp \
-              -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
+              -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best" \
               --merge-output-format mp4 \
               --no-playlist --no-warnings \
               $COOKIES_ARG \
               -o "media.%(ext)s" "$VIDEO_URL"
-            echo "file=media.mp4" >> $GITHUB_OUTPUT
-            echo "ext=mp4"        >> $GITHUB_OUTPUT
+            # yt-dlp may produce .webm or .mkv if mp4 streams unavailable
+            FILE=$(ls media.* 2>/dev/null | head -1)
+            EXT="${FILE##*.}"
+            echo "file=$FILE"  >> $GITHUB_OUTPUT
+            echo "ext=$EXT"    >> $GITHUB_OUTPUT
           fi
           ls -lh media.*
 
