@@ -105,9 +105,10 @@ router.get("/stream", async (req, res) => {
 
   } catch (err) {
     cleanup();
-    console.error("Summarize error:", err.message);
+    const detail = err.message || err.stderr || JSON.stringify(err);
+    console.error("Summarize error:", detail);
     if (!closed) {
-      emit("error", { message: err.message || "Summarization failed. Please try again." });
+      emit("error", { message: detail || "Summarization failed. Please try again." });
       res.end();
     }
   }
