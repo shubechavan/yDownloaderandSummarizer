@@ -1,6 +1,6 @@
 import express from "express";
 import { summarizeUrl, parseVTT, extractKeywords, groqSummarize } from "../lib/summarize-core.js";
-import youtubedl from "youtube-dl-exec";
+import { create as createYtdl } from "youtube-dl-exec";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 
 const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, "..", "yt-dlp.exe");
+const youtubedl = createYtdl(ytdlpPath);
 
 // ── Auth check ────────────────────────────────────────────────────────────────
 router.get("/check", (req, res) => res.json({ ok: true }));
@@ -60,7 +61,6 @@ router.get("/stream", async (req, res) => {
         noWarnings: true,
         quiet: true,
       },
-      { ytDlpPath: ytdlpPath }
     );
 
     if (closed) { cleanup(); return; }

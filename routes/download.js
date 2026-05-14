@@ -1,5 +1,5 @@
 import express from "express";
-import youtubedl from "youtube-dl-exec";
+import { create as createYtdl } from "youtube-dl-exec";
 import crypto from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 
 const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, "..", "yt-dlp.exe");
+const youtubedl = createYtdl(ytdlpPath);
 
 const GH_OWNER  = process.env.GITHUB_OWNER || "shubechavan";
 const GH_REPO   = process.env.GITHUB_REPO  || "yDownloaderandSummarizer";
@@ -25,8 +26,7 @@ router.get("/meta", async (req, res) => {
   try {
     const info = await youtubedl(
       videoUrl,
-      { dumpSingleJson: true, noWarnings: true, noCheckCertificates: true, noPlaylist: true, quiet: true },
-      { ytDlpPath: ytdlpPath }
+      { dumpSingleJson: true, noWarnings: true, noCheckCertificates: true, noPlaylist: true, quiet: true }
     );
     res.json({
       title:    info.title,
