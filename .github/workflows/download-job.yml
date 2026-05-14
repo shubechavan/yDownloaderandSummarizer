@@ -1,0 +1,77 @@
+name: Download Job Worker
+
+on:
+  repository_dispatch:
+    types: [download-request]
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install yt-dlp
+        run: |
+          curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+            -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp
+          yt-dlp --version
+
+      - name: Install ffmpeg
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Download media
+        id: dl
+        env:
+          VIDEO_URL: ${{ github.event.client_payload.videoUrl }}
+          DOWNLOAD_TYPE: ${{ github.event.client_payload.downloadType }}
+        run: |
+          if [ "$DOWNLOAD_TYPE" = "audio" ]; then
+            yt-dlp -x --audio-format mp3 --audio-quality 0 \
+              --no-playlist --no-warnings -o "media.%(ext)s" "$VIDEO_URL"
+            echo "file=media.mp3" >> $GITHUB_OUTPUT
+            echo "ext=mp3"       >> $GITHUB_OUTPUT
+          else
+            yt-dlp \
+              -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
+              --merge-output-format mp4 \
+              --no-playlist --no-warnings -o "media.%(ext)s" "$VIDEO_URL"
+            echo "file=media.mp4" >> $GITHUB_OUTPUT
+            echo "ext=mp4"        >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload to transfer.sh
+        id: upload
+        run: |
+          FILE="${{ steps.dl.outputs.file }}"
+          URL=$(curl -s --upload-file "$FILE" "https://transfer.sh/$FILE")
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Callback — success
+        if: success()
+        env:
+          JOB_ID:          ${{ github.event.client_payload.jobId }}
+          CALLBACK_URL:    ${{ github.event.client_payload.callbackUrl }}
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          curl -sf -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Callback-Secret: $CALLBACK_SECRET" \
+            -d "{
+              \"jobId\": \"$JOB_ID\",
+              \"status\": \"done\",
+              \"downloadUrl\": \"${{ steps.upload.outputs.url }}\",
+              \"ext\": \"${{ steps.dl.outputs.ext }}\"
+            }"
+
+      - name: Callback — failure
+        if: failure()
+        env:
+          JOB_ID:          ${{ github.event.client_payload.jobId }}
+          CALLBACK_URL:    ${{ github.event.client_payload.callbackUrl }}
+          CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+        run: |
+          curl -sf -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Callback-Secret: $CALLBACK_SECRET" \
+            -d "{\"jobId\": \"$JOB_ID\", \"status\": \"failed\", \"error\": \"Download or upload failed\"}" \
+            || true

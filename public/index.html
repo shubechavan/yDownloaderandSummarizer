@@ -350,15 +350,82 @@
                  : `${m}:${String(s).padStart(2,"0")}`;
   }
 
-  function download() {
+  async function download() {
     const url = document.getElementById("videoUrl").value.trim();
     const st  = document.getElementById("status");
+    const btn = document.querySelector(".download-btn");
     if (!url) { st.style.color = "#f85149"; st.textContent = "Please enter a YouTube URL."; return; }
+
+    btn.disabled = true;
+    btn.textContent = "⏳ Processing…";
     st.style.color = "#58a6ff";
-    st.textContent = "Starting download…";
-    window.location.href =
-      `/download?videoUrl=${encodeURIComponent(url)}&downloadType=${selectedType}&format=${selectedFormat}`;
-    setTimeout(() => { st.textContent = ""; }, 3000);
+    st.textContent = "Queuing your download…";
+
+    try {
+      const res = await fetch("/download/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: url, downloadType: selectedType, format: selectedFormat }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({}));
+        throw new Error(error || "Failed to start download");
+      }
+      const { jobId } = await res.json();
+      pollJob(jobId);
+    } catch (err) {
+      st.style.color = "#f85149";
+      st.textContent = err.message || "Download failed. Please try again.";
+      btn.disabled = false;
+      btn.textContent = "↓  Download";
+    }
+  }
+
+  function pollJob(jobId) {
+    const st  = document.getElementById("status");
+    const btn = document.querySelector(".download-btn");
+    const steps = [
+      "Fetching video from YouTube…",
+      "Converting with ffmpeg…",
+      "Uploading your file…",
+      "Almost ready…",
+    ];
+    let stepIdx = 0, polls = 0;
+    st.textContent = steps[0];
+
+    const timer = setInterval(async () => {
+      polls++;
+      if (polls % 15 === 0 && stepIdx < steps.length - 1) {
+        stepIdx++;
+        st.textContent = steps[stepIdx];
+      }
+      if (polls > 144) { // ~12 min timeout
+        clearInterval(timer);
+        st.style.color = "#f85149";
+        st.textContent = "Timed out — please try again.";
+        btn.disabled = false;
+        btn.textContent = "↓  Download";
+        return;
+      }
+      try {
+        const r = await fetch(`/download/status/${jobId}`);
+        const data = await r.json();
+        if (data.status === "done") {
+          clearInterval(timer);
+          st.style.color = "#3fb950";
+          st.textContent = "✓ Ready! Your download is starting…";
+          btn.disabled = false;
+          btn.textContent = "↓  Download";
+          setTimeout(() => { window.location.href = data.downloadUrl; }, 500);
+        } else if (data.status === "failed") {
+          clearInterval(timer);
+          st.style.color = "#f85149";
+          st.textContent = data.error || "Download failed. Please try again.";
+          btn.disabled = false;
+          btn.textContent = "↓  Download";
+        }
+      } catch { /* keep polling on transient errors */ }
+    }, 5000);
   }
 </script>
 </body>

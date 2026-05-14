@@ -1,18 +1,23 @@
 import express from "express";
 import youtubedl from "youtube-dl-exec";
-import fs from "fs";
+import crypto from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
+import Job from "../models/Job.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const router = express.Router();
 
 const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, "..", "yt-dlp.exe");
-const ffmpegPath = process.env.FFMPEG_PATH || "C:\\ffmpeg\\ffmpeg-2025-10-21-git-535d4047d3-full_build\\bin\\ffmpeg.exe";
 
-// Video metadata preview
+const GH_OWNER  = process.env.GITHUB_OWNER || "shubechavan";
+const GH_REPO   = process.env.GITHUB_REPO  || "yDownloaderandSummarizer";
+const GH_PAT    = process.env.GH_PAT;
+const RENDER_URL = process.env.RENDER_URL   || "http://localhost:5000";
+const CALLBACK_SECRET = process.env.CALLBACK_SECRET;
+
+// ── Video metadata preview ────────────────────────────────────────────────────
 router.get("/meta", async (req, res) => {
   const { videoUrl } = req.query;
   if (!videoUrl) return res.status(400).json({ message: "Missing videoUrl" });
@@ -24,10 +29,10 @@ router.get("/meta", async (req, res) => {
       { ytDlpPath: ytdlpPath }
     );
     res.json({
-      title: info.title,
+      title:    info.title,
       thumbnail: info.thumbnail,
       duration: info.duration,
-      channel: info.channel || info.uploader,
+      channel:  info.channel || info.uploader,
     });
   } catch (err) {
     console.error("Meta fetch error:", err.message);
@@ -35,48 +40,68 @@ router.get("/meta", async (req, res) => {
   }
 });
 
-// Download
-router.get("/", async (req, res) => {
+// ── Trigger a download job (offloaded to GitHub Actions) ──────────────────────
+router.post("/trigger", async (req, res) => {
+  const { videoUrl, downloadType = "video", format = "mp4" } = req.body;
+  if (!videoUrl) return res.status(400).json({ error: "Missing videoUrl" });
+
+  if (!GH_PAT) {
+    return res.status(503).json({ error: "Download service not configured (GH_PAT missing)" });
+  }
+
+  const jobId = crypto.randomUUID();
+
   try {
-    const { videoUrl, downloadType = "video", format = "mp4" } = req.query;
-    if (!videoUrl) return res.status(400).send("Missing videoUrl");
-
-    const downloadsDir = path.resolve("downloads");
-    if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
-
-    const isAudio = downloadType === "audio";
-    const ext = isAudio ? "mp3" : format;
-    const finalOutputPath = path.join(downloadsDir, `media_${Date.now()}.${ext}`);
-
-    if (!fs.existsSync(ytdlpPath)) return res.status(500).send("yt-dlp not found");
-
-    const options = {
-      output: finalOutputPath,
-      ffmpegLocation: ffmpegPath,
-      noCheckCertificates: true,
-      noWarnings: true,
-      noPart: true,
-      noPlaylist: true,
-    };
-
-    if (isAudio) {
-      options.extractAudio = true;
-      options.audioFormat  = "mp3";
-      options.audioQuality = 0;
-      options.format       = "bestaudio/best";
-    } else {
-      options.format            = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
-      options.mergeOutputFormat = format;
-    }
-
-    await youtubedl(videoUrl, options, { ytDlpPath: ytdlpPath });
-
-    res.download(finalOutputPath, `media.${ext}`, () => {
-      fs.unlink(finalOutputPath, () => {});
-    });
+    await Job.create({ jobId });
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Download failed");
+    return res.status(500).json({ error: "Failed to create job" });
+  }
+
+  const callbackUrl = `${RENDER_URL}/download/callback`;
+
+  // Fire-and-forget — trigger GitHub Actions via repository_dispatch
+  fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${GH_PAT}`,
+      Accept: "application/vnd.github.v3+json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      event_type: "download-request",
+      client_payload: { videoUrl, downloadType, format, jobId, callbackUrl },
+    }),
+  }).catch((err) => console.error("Failed to trigger GH Actions:", err.message));
+
+  res.json({ jobId });
+});
+
+// ── Poll job status ───────────────────────────────────────────────────────────
+router.get("/status/:jobId", async (req, res) => {
+  try {
+    const job = await Job.findOne({ jobId: req.params.jobId }).lean();
+    if (!job) return res.status(404).json({ error: "Job not found" });
+    res.json({ status: job.status, downloadUrl: job.downloadUrl, ext: job.ext, error: job.error });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch job status" });
+  }
+});
+
+// ── Callback from GitHub Actions ──────────────────────────────────────────────
+router.post("/callback", async (req, res) => {
+  const secret = req.headers["x-callback-secret"];
+  if (!CALLBACK_SECRET || secret !== CALLBACK_SECRET) {
+    return res.status(401).end();
+  }
+
+  const { jobId, status, downloadUrl, ext, error } = req.body;
+  if (!jobId) return res.status(400).end();
+
+  try {
+    await Job.updateOne({ jobId }, { status, downloadUrl, ext, error });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update job" });
   }
 });
 
