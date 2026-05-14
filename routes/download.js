@@ -1,14 +1,46 @@
 import express from "express";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import Job from "../models/Job.js";
 
 const router = express.Router();
 
-const GH_OWNER  = process.env.GITHUB_OWNER || "shubechavan";
-const GH_REPO   = process.env.GITHUB_REPO  || "yDownloaderandSummarizer";
-const GH_PAT    = process.env.GH_PAT;
-const RENDER_URL = process.env.RENDER_URL   || "http://localhost:5000";
+const GH_OWNER        = process.env.GITHUB_OWNER || "shubechavan";
+const GH_REPO         = process.env.GITHUB_REPO  || "yDownloaderandSummarizer";
+const GH_PAT          = process.env.GH_PAT;
+const RENDER_URL      = process.env.RENDER_URL    || "http://localhost:5000";
 const CALLBACK_SECRET = process.env.CALLBACK_SECRET;
+
+// In-memory fallback when MongoDB is unavailable (e.g. cold start)
+const memJobs = new Map();
+
+function dbReady() {
+  return mongoose.connection.readyState === 1;
+}
+
+async function createJob(jobId) {
+  if (dbReady()) {
+    await Job.create({ jobId });
+  } else {
+    memJobs.set(jobId, { jobId, status: "pending" });
+  }
+}
+
+async function getJob(jobId) {
+  if (dbReady()) {
+    return Job.findOne({ jobId }).lean();
+  }
+  return memJobs.get(jobId) || null;
+}
+
+async function updateJob(jobId, fields) {
+  if (dbReady()) {
+    await Job.updateOne({ jobId }, fields);
+  } else {
+    const job = memJobs.get(jobId) || { jobId };
+    memJobs.set(jobId, { ...job, ...fields });
+  }
+}
 
 // ── Video metadata preview (YouTube oEmbed — no yt-dlp needed) ───────────────
 router.get("/meta", async (req, res) => {
@@ -24,7 +56,7 @@ router.get("/meta", async (req, res) => {
       title:     data.title,
       thumbnail: data.thumbnail_url,
       channel:   data.author_name,
-      duration:  null, // oEmbed doesn't provide duration
+      duration:  null,
     });
   } catch (err) {
     console.error("Meta fetch error:", err.message);
@@ -38,20 +70,20 @@ router.post("/trigger", async (req, res) => {
   if (!videoUrl) return res.status(400).json({ error: "Missing videoUrl" });
 
   if (!GH_PAT) {
-    return res.status(503).json({ error: "Download service not configured (GH_PAT missing)" });
+    return res.status(503).json({ error: "Download service not configured — GH_PAT missing" });
   }
 
   const jobId = crypto.randomUUID();
 
   try {
-    await Job.create({ jobId });
+    await createJob(jobId);
   } catch (err) {
-    return res.status(500).json({ error: "Failed to create job" });
+    console.error("Job create error:", err.message);
+    return res.status(500).json({ error: "Failed to create job: " + err.message });
   }
 
   const callbackUrl = `${RENDER_URL}/download/callback`;
 
-  // Fire-and-forget — trigger GitHub Actions via repository_dispatch
   fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
     method: "POST",
     headers: {
@@ -71,7 +103,7 @@ router.post("/trigger", async (req, res) => {
 // ── Poll job status ───────────────────────────────────────────────────────────
 router.get("/status/:jobId", async (req, res) => {
   try {
-    const job = await Job.findOne({ jobId: req.params.jobId }).lean();
+    const job = await getJob(req.params.jobId);
     if (!job) return res.status(404).json({ error: "Job not found" });
     res.json({ status: job.status, downloadUrl: job.downloadUrl, ext: job.ext, error: job.error });
   } catch (err) {
@@ -90,7 +122,7 @@ router.post("/callback", async (req, res) => {
   if (!jobId) return res.status(400).end();
 
   try {
-    await Job.updateOne({ jobId }, { status, downloadUrl, ext, error });
+    await updateJob(jobId, { status, downloadUrl, ext, error });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Failed to update job" });
