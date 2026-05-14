@@ -1,16 +1,8 @@
 import express from "express";
-import { create as createYtdl } from "youtube-dl-exec";
 import crypto from "crypto";
-import path from "path";
-import { fileURLToPath } from "url";
 import Job from "../models/Job.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const router = express.Router();
-
-const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, "..", "yt-dlp.exe");
-const youtubedl = createYtdl(ytdlpPath);
 
 const GH_OWNER  = process.env.GITHUB_OWNER || "shubechavan";
 const GH_REPO   = process.env.GITHUB_REPO  || "yDownloaderandSummarizer";
@@ -18,21 +10,21 @@ const GH_PAT    = process.env.GH_PAT;
 const RENDER_URL = process.env.RENDER_URL   || "http://localhost:5000";
 const CALLBACK_SECRET = process.env.CALLBACK_SECRET;
 
-// ── Video metadata preview ────────────────────────────────────────────────────
+// ── Video metadata preview (YouTube oEmbed — no yt-dlp needed) ───────────────
 router.get("/meta", async (req, res) => {
   const { videoUrl } = req.query;
   if (!videoUrl) return res.status(400).json({ message: "Missing videoUrl" });
 
   try {
-    const info = await youtubedl(
-      videoUrl,
-      { dumpSingleJson: true, noWarnings: true, noCheckCertificates: true, noPlaylist: true, quiet: true }
-    );
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`;
+    const r = await fetch(oembedUrl);
+    if (!r.ok) return res.status(404).json({ message: "Video not found" });
+    const data = await r.json();
     res.json({
-      title:    info.title,
-      thumbnail: info.thumbnail,
-      duration: info.duration,
-      channel:  info.channel || info.uploader,
+      title:     data.title,
+      thumbnail: data.thumbnail_url,
+      channel:   data.author_name,
+      duration:  null, // oEmbed doesn't provide duration
     });
   } catch (err) {
     console.error("Meta fetch error:", err.message);
