@@ -1,0 +1,10 @@
+node_modules/
+.env
+downloads/
+*.log
+*.part
+*.ytdl
+.DS_Store
+Thumbs.db
+yt-dlp.exe
+yt-dlp

@@ -1,0 +1,86 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. Syntax & dependency audit ─────────────────────────────────────────────
+  lint:
+    name: Lint & Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate JS syntax
+        run: |
+          for f in server.js routes/*.js lib/*.js; do
+            echo "Checking $f..."
+            node --check "$f" || exit 1
+          done
+
+      - name: Audit for known vulnerabilities
+        run: npm audit --audit-level=high
+        continue-on-error: true   # warn but don't fail the pipeline
+
+  # ── 2. Docker build ───────────────────────────────────────────────────────────
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false          # just build, don't push (no registry needed)
+          tags: ysummarize:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test container starts
+        run: |
+          docker build -t ysummarize:smoke .
+          docker run --rm -d \
+            -e GROQ_API_KEY=dummy \
+            -e MONGO_URI=mongodb://localhost/test \
+            -e JWT_SECRET=test \
+            -p 5000:5000 \
+            --name smoke_test \
+            ysummarize:smoke
+          sleep 5
+          curl -sf http://localhost:5000/summarize/check || (docker logs smoke_test && exit 1)
+          docker stop smoke_test
+
+  # ── 3. Deploy to Render (only on push to main) ────────────────────────────────
+  deploy:
+    name: Deploy → Render
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Trigger Render deploy hook
+        run: |
+          curl -sf -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            && echo "Deploy triggered successfully" \
+            || echo "Deploy hook not configured — skipping"
+        continue-on-error: true

@@ -1,0 +1,41 @@
+# Render.com Infrastructure-as-Code
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Setup:
+#   1. Push this repo to GitHub
+#   2. Go to render.com → New → Blueprint → connect your repo
+#   3. Render reads this file and creates the service automatically
+#   4. Set the environment variables below in the Render dashboard
+
+services:
+  - type: web
+    name: ysummarize
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free          # Free tier — 512 MB RAM, spins down after 15 min inactivity
+    region: oregon
+    branch: main
+    autoDeploy: true    # Auto-deploy on every push to main
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: YTDLP_PATH
+        value: /usr/local/bin/yt-dlp
+      - key: FFMPEG_PATH
+        value: ffmpeg
+      - key: PORT
+        value: 10000     # Render assigns port 10000 by default
+
+      # Set these as secret values in the Render dashboard:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+    disk:
+      name: downloads
+      mountPath: /app/downloads
+      sizeGB: 1
