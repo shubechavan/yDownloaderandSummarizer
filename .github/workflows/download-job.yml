@@ -45,7 +45,7 @@ jobs:
             yt-dlp -x --audio-format mp3 --audio-quality 0 \
               --no-playlist --no-warnings \
               $COOKIES_ARG \
-              -o "media.%(ext)s" "$VIDEO_URL"
+              -o "media.%(ext)s" "$VIDEO_URL" 2>&1 | tee /tmp/ytdlp-stderr.txt; test ${PIPESTATUS[0]} -eq 0
             FILE=$(ls media.* 2>/dev/null | head -1)
             echo "file=$FILE"  >> $GITHUB_OUTPUT
             echo "ext=mp3"     >> $GITHUB_OUTPUT
@@ -55,7 +55,7 @@ jobs:
               --merge-output-format mp4 \
               --no-playlist --no-warnings \
               $COOKIES_ARG \
-              -o "media.%(ext)s" "$VIDEO_URL"
+              -o "media.%(ext)s" "$VIDEO_URL" 2>&1 | tee /tmp/ytdlp-stderr.txt; test ${PIPESTATUS[0]} -eq 0
             # yt-dlp may produce .webm or .mkv if mp4 streams unavailable
             FILE=$(ls media.* 2>/dev/null | head -1)
             EXT="${FILE##*.}"
@@ -125,18 +125,30 @@ jobs:
             && echo "Callback delivered OK" \
             || echo "WARNING: Callback delivery failed (status=$?)"
 
+      - name: Capture failure reason
+        if: failure()
+        id: reason
+        run: |
+          # Collect yt-dlp stderr if available, else generic message
+          MSG="Download failed — check the Actions log for details"
+          if grep -q "Sign in to confirm" /tmp/ytdlp-stderr.txt 2>/dev/null; then
+            MSG="Download failed — YouTube bot check (cookies may be expired, re-export YT_COOKIES)"
+          fi
+          echo "msg=$MSG" >> $GITHUB_OUTPUT
+
       - name: Callback — failure
         if: failure()
         env:
           JOB_ID:          ${{ github.event.client_payload.jobId }}
           CALLBACK_URL:    ${{ github.event.client_payload.callbackUrl }}
           CALLBACK_SECRET: ${{ secrets.CALLBACK_SECRET }}
+          ERR_MSG:         ${{ steps.reason.outputs.msg }}
         run: |
           echo "Sending failure callback to $CALLBACK_URL for job $JOB_ID"
           PAYLOAD=$(jq -n \
             --arg jobId "$JOB_ID" \
             --arg status "failed" \
-            --arg error "Download failed — YouTube bot check. Add YT_COOKIES secret to fix." \
+            --arg error "${ERR_MSG:-Download failed — check the Actions log}" \
             '{jobId: $jobId, status: $status, error: $error}')
           curl -sf -X POST "$CALLBACK_URL" \
             -H "Content-Type: application/json" \
