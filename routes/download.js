@@ -65,54 +65,56 @@ router.get("/meta", async (req, res) => {
 });
 
 // ── cobalt API helper ─────────────────────────────────────────────────────────
-async function tryCobalt(videoUrl, downloadType, format) {
+const COBALT_INSTANCES = [
+  "https://api.cobalt.tools/",
+  "https://cobalt.api.hsyl.fr/",
+  "https://cobalt.pstream.net/",
+];
+
+async function tryCobaltInstance(instance, videoUrl, downloadType) {
   const body = {
     url: videoUrl,
     videoQuality: "1080",
     filenameStyle: "basic",
+    downloadMode: downloadType === "audio" ? "audio" : "auto",
+    audioFormat:  "mp3",
+    audioBitrate: "320",
   };
 
-  if (downloadType === "audio") {
-    body.downloadMode = "audio";
-    body.audioFormat  = "mp3";
-    body.audioBitrate = "320";
-  } else {
-    body.downloadMode = "auto";
-    body.audioFormat  = "mp3";
-  }
-
-  const res = await fetch("https://api.cobalt.tools/", {
+  const res = await fetch(instance, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Accept":        "application/json",
+      "User-Agent":    "Mozilla/5.0 (compatible; YSummarize/1.0)",
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(12000),
   });
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => res.status);
-    throw new Error(`Cobalt HTTP ${res.status}: ${txt}`);
+  const text = await res.text();
+  console.log(`[cobalt] ${instance} → HTTP ${res.status}: ${text.slice(0, 200)}`);
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 100)}`);
+
+  const data = JSON.parse(text);
+  if (data.status === "error") throw new Error(data.error?.code || "cobalt error");
+  if (data.status === "redirect" || data.status === "tunnel") return data.url;
+  if (data.status === "picker" && data.picker?.length) return data.picker[0].url;
+  throw new Error(`Unexpected status: ${data.status}`);
+}
+
+async function tryCobalt(videoUrl, downloadType, format) {
+  for (const instance of COBALT_INSTANCES) {
+    try {
+      const url = await tryCobaltInstance(instance, videoUrl, downloadType);
+      console.log(`[cobalt] Success via ${instance}`);
+      return url;
+    } catch (err) {
+      console.warn(`[cobalt] ${instance} failed: ${err.message}`);
+    }
   }
-
-  const data = await res.json();
-
-  if (data.status === "error") {
-    throw new Error(data.error?.code || "Cobalt error");
-  }
-
-  // redirect / tunnel → direct URL we can hand to the browser
-  if (data.status === "redirect" || data.status === "tunnel") {
-    return data.url;
-  }
-
-  // picker → multiple streams, take the first one
-  if (data.status === "picker" && data.picker?.length) {
-    return data.picker[0].url;
-  }
-
-  throw new Error(`Unexpected cobalt status: ${data.status}`);
+  throw new Error("All cobalt instances failed");
 }
 
 // ── Trigger download — cobalt first, GitHub Actions fallback ──────────────────

@@ -407,14 +407,14 @@
 
     function statusMsg() {
       const s = Math.floor((Date.now() - startTime) / 1000);
-      if (s < 30)  return "GitHub Actions runner is starting…";
-      if (s < 75)  return "Installing yt-dlp & ffmpeg…";
-      if (s < 150) return "Downloading video from YouTube…";
-      if (s < 220) return "Converting and uploading file…";
+      if (s < 30)  return "Preparing download server…";
+      if (s < 75)  return "Setting up tools…";
+      if (s < 150) return "Downloading from YouTube…";
+      if (s < 220) return "Converting and uploading…";
       return "Almost done — wrapping up…";
     }
 
-    st.textContent = "Queued — GitHub Actions is starting… (usually 1–3 min)";
+    st.textContent = "Starting download… (usually 1–3 min)";
 
     const timer = setInterval(async () => {
       polls++;
