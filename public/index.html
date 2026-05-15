@@ -371,8 +371,20 @@
         const { error } = await res.json().catch(() => ({}));
         throw new Error(error || "Failed to start download");
       }
-      const { jobId } = await res.json();
-      pollJob(jobId);
+      const data = await res.json();
+
+      // cobalt succeeded — instant redirect, no polling needed
+      if (data.instant && data.downloadUrl) {
+        st.style.color = "#3fb950";
+        st.textContent = "✓ Ready! Starting download…";
+        btn.disabled = false;
+        btn.textContent = "↓  Download";
+        setTimeout(() => { window.location.href = data.downloadUrl; }, 300);
+        return;
+      }
+
+      // GitHub Actions fallback — poll for completion
+      pollJob(data.jobId);
     } catch (err) {
       st.style.color = "#f85149";
       st.textContent = err.message || "Download failed. Please try again.";

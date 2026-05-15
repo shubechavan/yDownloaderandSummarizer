@@ -11,7 +11,7 @@ const GH_PAT          = process.env.GH_PAT;
 const RENDER_URL      = process.env.RENDER_URL    || "http://localhost:5000";
 const CALLBACK_SECRET = process.env.CALLBACK_SECRET;
 
-// In-memory fallback when MongoDB is unavailable (e.g. cold start)
+// In-memory fallback when MongoDB is unavailable
 const memJobs = new Map();
 
 function dbReady() {
@@ -42,7 +42,7 @@ async function updateJob(jobId, fields) {
   }
 }
 
-// ── Video metadata preview (YouTube oEmbed — no yt-dlp needed) ───────────────
+// ── Video metadata preview ────────────────────────────────────────────────────
 router.get("/meta", async (req, res) => {
   const { videoUrl } = req.query;
   if (!videoUrl) return res.status(400).json({ message: "Missing videoUrl" });
@@ -64,13 +64,75 @@ router.get("/meta", async (req, res) => {
   }
 });
 
-// ── Trigger a download job (offloaded to GitHub Actions) ──────────────────────
+// ── cobalt API helper ─────────────────────────────────────────────────────────
+async function tryCobalt(videoUrl, downloadType, format) {
+  const body = {
+    url: videoUrl,
+    videoQuality: "1080",
+    filenameStyle: "basic",
+  };
+
+  if (downloadType === "audio") {
+    body.downloadMode = "audio";
+    body.audioFormat  = "mp3";
+    body.audioBitrate = "320";
+  } else {
+    body.downloadMode = "auto";
+    body.audioFormat  = "mp3";
+  }
+
+  const res = await fetch("https://api.cobalt.tools/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept":        "application/json",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.status);
+    throw new Error(`Cobalt HTTP ${res.status}: ${txt}`);
+  }
+
+  const data = await res.json();
+
+  if (data.status === "error") {
+    throw new Error(data.error?.code || "Cobalt error");
+  }
+
+  // redirect / tunnel → direct URL we can hand to the browser
+  if (data.status === "redirect" || data.status === "tunnel") {
+    return data.url;
+  }
+
+  // picker → multiple streams, take the first one
+  if (data.status === "picker" && data.picker?.length) {
+    return data.picker[0].url;
+  }
+
+  throw new Error(`Unexpected cobalt status: ${data.status}`);
+}
+
+// ── Trigger download — cobalt first, GitHub Actions fallback ──────────────────
 router.post("/trigger", async (req, res) => {
   const { videoUrl, downloadType = "video", format = "mp4" } = req.body;
   if (!videoUrl) return res.status(400).json({ error: "Missing videoUrl" });
 
+  // ── 1. Try cobalt (instant, no job queue needed) ──────────────────────────
+  try {
+    console.log(`[cobalt] Trying ${downloadType} download for ${videoUrl}`);
+    const downloadUrl = await tryCobalt(videoUrl, downloadType, format);
+    console.log(`[cobalt] Success: ${downloadUrl}`);
+    return res.json({ downloadUrl, instant: true });
+  } catch (err) {
+    console.warn("[cobalt] Failed, falling back to GitHub Actions:", err.message);
+  }
+
+  // ── 2. Fall back to GitHub Actions ───────────────────────────────────────
   if (!GH_PAT) {
-    return res.status(503).json({ error: "Download service not configured — GH_PAT missing" });
+    return res.status(503).json({ error: "Download service unavailable — please try again later." });
   }
 
   const jobId = crypto.randomUUID();
