@@ -13,9 +13,10 @@
       color: #e6edf3;
       font-family: "Poppins", sans-serif;
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
-    /* ── Nav ── */
     .nav-bar {
       background: rgba(13,17,23,0.92);
       border-bottom: 1px solid #21262d;
@@ -48,125 +49,70 @@
     }
     .nav-link:hover { color: #e6edf3; border-color: #bc8cff; background: rgba(188,140,255,.08); }
 
-    /* ── Layout ── */
     .main {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 64px 24px 80px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px;
+      text-align: center;
     }
 
-    /* ── Header ── */
-    .page-header { text-align: center; margin-bottom: 48px; }
-    .page-header h1 {
-      font-size: clamp(2rem, 5vw, 2.8rem);
+    .badge {
+      display: inline-block;
+      background: rgba(88,166,255,.1);
+      border: 1px solid rgba(88,166,255,.25);
+      color: #58a6ff;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 20px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      font-size: clamp(2.2rem, 5vw, 3.2rem);
       font-weight: 700;
       letter-spacing: -1px;
       background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 50%, #ff79c6 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-      margin-bottom: 10px;
+      margin-bottom: 16px;
+      line-height: 1.15;
     }
-    .page-header p { color: #8b949e; font-size: 15px; }
 
-    /* ── URL Input ── */
-    .input-wrapper {
+    .subtitle {
+      color: #8b949e;
+      font-size: 16px;
+      max-width: 440px;
+      line-height: 1.7;
+      margin-bottom: 48px;
+    }
+
+    .icon-row {
       display: flex;
-      align-items: center;
-      gap: 10px;
+      gap: 20px;
+      margin-bottom: 48px;
+      justify-content: center;
+    }
+    .icon-pill {
       background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 16px;
-      padding: 8px 8px 8px 18px;
-      transition: border-color .3s, box-shadow .3s;
-      margin-bottom: 10px;
-    }
-    .input-wrapper:focus-within {
-      border-color: #58a6ff;
-      box-shadow: 0 0 0 3px rgba(88,166,255,.12);
-    }
-    .yt-icon { color: #f44; font-size: 18px; flex-shrink: 0; }
-    .url-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: #e6edf3;
-      font-family: "Poppins", sans-serif;
-      font-size: 14px;
-      outline: none;
-      min-width: 0;
-    }
-    .url-input::placeholder { color: #484f58; }
-
-    /* ── Metadata preview ── */
-    .meta-preview {
-      display: none;
-      align-items: center;
-      gap: 12px;
-      background: rgba(255,255,255,.03);
       border: 1px solid #21262d;
       border-radius: 12px;
-      padding: 12px 14px;
-      margin-bottom: 20px;
-      animation: fadeUp .25s ease;
-    }
-    .meta-preview.show { display: flex; }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; } }
-    .meta-thumb {
-      width: 96px;
-      height: 54px;
-      object-fit: cover;
-      border-radius: 8px;
-      background: #21262d;
-      flex-shrink: 0;
-    }
-    .meta-title { font-size: 13px; font-weight: 600; color: #e6edf3; margin-bottom: 4px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .meta-sub { font-size: 11px; color: #8b949e; }
-
-    /* ── Format card ── */
-    .format-card {
-      background: #161b22;
-      border: 1px solid #21262d;
-      border-radius: 16px;
-      padding: 22px 24px;
-      margin-bottom: 20px;
-    }
-
-    .format-row { display: flex; gap: 12px; margin-bottom: 16px; }
-    .format-row:last-child { margin-bottom: 0; }
-    .format-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: #8b949e;
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      min-width: 56px;
-      padding-top: 10px;
-    }
-    .toggle-group { display: flex; gap: 8px; flex-wrap: wrap; }
-    .toggle-btn {
-      background: rgba(255,255,255,.04);
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      color: #8b949e;
-      font-family: "Poppins", sans-serif;
+      padding: 14px 22px;
       font-size: 13px;
-      font-weight: 600;
-      padding: 8px 20px;
-      cursor: pointer;
-      transition: all .2s;
+      color: #8b949e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .toggle-btn.active {
-      background: rgba(88,166,255,.12);
-      border-color: #58a6ff;
-      color: #58a6ff;
-    }
-    .toggle-btn:hover:not(.active) { border-color: #484f58; color: #e6edf3; }
+    .icon-pill span { font-size: 18px; }
 
-    /* ── Download button ── */
-    .download-btn {
-      width: 100%;
+    .cta-btn {
       background: linear-gradient(135deg, #58a6ff, #bc8cff);
       border: none;
       border-radius: 14px;
@@ -174,51 +120,20 @@
       font-family: "Poppins", sans-serif;
       font-weight: 700;
       font-size: 15px;
-      padding: 15px;
+      padding: 15px 36px;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
       transition: opacity .25s, transform .2s, box-shadow .25s;
       letter-spacing: .3px;
     }
-    .download-btn:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 8px 28px rgba(88,166,255,.28); }
-    .download-btn:active { transform: translateY(0); }
+    .cta-btn:hover { opacity: .9; transform: translateY(-2px); box-shadow: 0 10px 30px rgba(88,166,255,.28); }
 
-    /* ── Status ── */
-    .status {
-      text-align: center;
-      font-size: 13px;
-      margin-top: 14px;
-      min-height: 20px;
-      transition: all .3s;
+    .note {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #484f58;
     }
-
-    /* ── Summarizer CTA ── */
-    .cta-box {
-      margin-top: 40px;
-      background: linear-gradient(135deg, rgba(88,166,255,.08), rgba(188,140,255,.08));
-      border: 1px solid rgba(188,140,255,.2);
-      border-radius: 16px;
-      padding: 22px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-    .cta-text h3 { font-size: 14px; font-weight: 600; color: #e6edf3; margin-bottom: 4px; }
-    .cta-text p  { font-size: 12px; color: #8b949e; }
-    .cta-btn {
-      background: linear-gradient(135deg, #58a6ff, #bc8cff);
-      border: none;
-      border-radius: 10px;
-      color: #0d1117;
-      font-family: "Poppins", sans-serif;
-      font-weight: 700;
-      font-size: 13px;
-      padding: 10px 22px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: opacity .2s, transform .2s;
-    }
-    .cta-btn:hover { opacity: .9; transform: translateY(-1px); }
   </style>
 </head>
 <body>
@@ -231,226 +146,26 @@
 </nav>
 
 <div class="main">
+  <div class="badge">Coming Soon</div>
 
-  <div class="page-header">
-    <h1>Media Downloader</h1>
-    <p>Download any YouTube video or audio — free &amp; fast</p>
+  <h1>Media Downloader<br>In Development</h1>
+
+  <p class="subtitle">
+    We're building a faster, more reliable download experience.
+    In the meantime, try our AI Summarizer — get key insights
+    from any YouTube video in seconds.
+  </p>
+
+  <div class="icon-row">
+    <div class="icon-pill"><span>&#127911;</span> MP3 Audio</div>
+    <div class="icon-pill"><span>&#127916;</span> MP4 Video</div>
+    <div class="icon-pill"><span>&#9889;</span> Fast &amp; Free</div>
   </div>
 
-  <!-- URL input -->
-  <div class="input-wrapper">
-    <span class="yt-icon">&#9654;</span>
-    <input type="url" id="videoUrl" class="url-input"
-           placeholder="https://www.youtube.com/watch?v=…"
-           oninput="onUrlInput(this.value)" />
-  </div>
+  <a href="/summarizer" class="cta-btn">Try AI Summarizer instead</a>
 
-  <!-- Metadata preview -->
-  <div class="meta-preview" id="metaPreview">
-    <img class="meta-thumb" id="metaThumb" src="" alt="" />
-    <div style="min-width:0;flex:1">
-      <div class="meta-title" id="metaTitle"></div>
-      <div class="meta-sub"   id="metaSub"></div>
-    </div>
-  </div>
-
-  <!-- Format options -->
-  <div class="format-card">
-    <div class="format-row">
-      <span class="format-label">Type</span>
-      <div class="toggle-group" id="typeGroup">
-        <button class="toggle-btn active" data-value="video" onclick="selectType(this)">Video</button>
-        <button class="toggle-btn"        data-value="audio" onclick="selectType(this)">Audio Only</button>
-      </div>
-    </div>
-    <div class="format-row" id="formatRow">
-      <span class="format-label">Format</span>
-      <div class="toggle-group" id="formatGroup">
-        <button class="toggle-btn active" data-value="mp4"  onclick="selectFormat(this)">MP4</button>
-        <button class="toggle-btn"        data-value="webm" onclick="selectFormat(this)">WEBM</button>
-      </div>
-    </div>
-  </div>
-
-  <button class="download-btn" onclick="download()">&#8595;&nbsp; Download</button>
-
-  <div class="status" id="status"></div>
-
-  <!-- Summarizer CTA -->
-  <div class="cta-box">
-    <div class="cta-text">
-      <h3>Want a summary instead?</h3>
-      <p>AI reads the video and gives you key insights + topic cloud</p>
-    </div>
-    <button class="cta-btn" onclick="window.location.href='/summarizer'">Try YSummarize</button>
-  </div>
-
+  <p class="note">The summarizer already works — no download needed.</p>
 </div>
 
-<script>
-  let selectedType   = "video";
-  let selectedFormat = "mp4";
-  let metaTimer      = null;
-
-  function selectType(btn) {
-    document.querySelectorAll("#typeGroup .toggle-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    selectedType = btn.dataset.value;
-
-    const formatRow = document.getElementById("formatRow");
-    const fmtGroup  = document.getElementById("formatGroup");
-
-    if (selectedType === "audio") {
-      formatRow.style.display = "none";
-      selectedFormat = "mp3";
-    } else {
-      formatRow.style.display = "flex";
-      selectedFormat = document.querySelector("#formatGroup .toggle-btn.active")?.dataset.value || "mp4";
-    }
-  }
-
-  function selectFormat(btn) {
-    document.querySelectorAll("#formatGroup .toggle-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    selectedFormat = btn.dataset.value;
-  }
-
-  function onUrlInput(val) {
-    clearTimeout(metaTimer);
-    const preview = document.getElementById("metaPreview");
-    if (!val.includes("youtube.com") && !val.includes("youtu.be")) {
-      preview.className = "meta-preview";
-      return;
-    }
-    document.getElementById("metaThumb").src = "";
-    document.getElementById("metaTitle").textContent = "";
-    document.getElementById("metaSub").textContent   = "Fetching info…";
-    preview.className = "meta-preview show";
-    metaTimer = setTimeout(() => fetchMeta(val), 700);
-  }
-
-  async function fetchMeta(url) {
-    try {
-      const res = await fetch(`/download/meta?videoUrl=${encodeURIComponent(url)}`);
-      if (!res.ok) { document.getElementById("metaPreview").className = "meta-preview"; return; }
-      const { title, thumbnail, duration, channel } = await res.json();
-      document.getElementById("metaThumb").src       = thumbnail || "";
-      document.getElementById("metaTitle").textContent = title || "";
-      document.getElementById("metaSub").textContent  =
-        [channel, duration ? fmtDur(duration) : ""].filter(Boolean).join(" · ");
-    } catch {
-      document.getElementById("metaPreview").className = "meta-preview";
-    }
-  }
-
-  function fmtDur(sec) {
-    if (!sec) return "";
-    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-    return h > 0 ? `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`
-                 : `${m}:${String(s).padStart(2,"0")}`;
-  }
-
-  async function download() {
-    const url = document.getElementById("videoUrl").value.trim();
-    const st  = document.getElementById("status");
-    const btn = document.querySelector(".download-btn");
-    if (!url) { st.style.color = "#f85149"; st.textContent = "Please enter a YouTube URL."; return; }
-
-    btn.disabled = true;
-    btn.textContent = "⏳ Processing…";
-    st.style.color = "#58a6ff";
-    st.textContent = "Queuing your download…";
-
-    try {
-      const res = await fetch("/download/trigger", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoUrl: url, downloadType: selectedType, format: selectedFormat }),
-      });
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({}));
-        throw new Error(error || "Failed to start download");
-      }
-      const data = await res.json();
-
-      // cobalt succeeded — instant redirect, no polling needed
-      if (data.instant && data.downloadUrl) {
-        st.style.color = "#3fb950";
-        st.textContent = "✓ Ready! Starting download…";
-        btn.disabled = false;
-        btn.textContent = "↓  Download";
-        setTimeout(() => { window.location.href = data.downloadUrl; }, 300);
-        return;
-      }
-
-      // GitHub Actions fallback — poll for completion
-      pollJob(data.jobId);
-    } catch (err) {
-      st.style.color = "#f85149";
-      st.textContent = err.message || "Download failed. Please try again.";
-      btn.disabled = false;
-      btn.textContent = "↓  Download";
-    }
-  }
-
-  function pollJob(jobId) {
-    const st  = document.getElementById("status");
-    const btn = document.querySelector(".download-btn");
-    let polls = 0;
-    const startTime = Date.now();
-
-    function elapsed() {
-      const s = Math.floor((Date.now() - startTime) / 1000);
-      if (s < 60) return `${s}s`;
-      return `${Math.floor(s / 60)}m ${s % 60}s`;
-    }
-
-    function statusMsg() {
-      const s = Math.floor((Date.now() - startTime) / 1000);
-      if (s < 30)  return "Preparing download server…";
-      if (s < 75)  return "Setting up tools…";
-      if (s < 150) return "Downloading from YouTube…";
-      if (s < 220) return "Converting and uploading…";
-      return "Almost done — wrapping up…";
-    }
-
-    st.textContent = "Starting download… (usually 1–3 min)";
-
-    const timer = setInterval(async () => {
-      polls++;
-
-      if (polls > 120) { // 10 min hard timeout
-        clearInterval(timer);
-        st.style.color = "#f85149";
-        st.textContent = "Timed out after 10 min — please try again.";
-        btn.disabled = false;
-        btn.textContent = "↓  Download";
-        return;
-      }
-
-      // Update status text every poll
-      st.textContent = `${statusMsg()} (${elapsed()})`;
-
-      try {
-        const r = await fetch(`/download/status/${jobId}`);
-        const data = await r.json();
-        if (data.status === "done") {
-          clearInterval(timer);
-          st.style.color = "#3fb950";
-          st.textContent = "✓ Ready! Your download is starting…";
-          btn.disabled = false;
-          btn.textContent = "↓  Download";
-          setTimeout(() => { window.location.href = data.downloadUrl; }, 500);
-        } else if (data.status === "failed") {
-          clearInterval(timer);
-          st.style.color = "#f85149";
-          st.textContent = data.error || "Download failed. Please try again.";
-          btn.disabled = false;
-          btn.textContent = "↓  Download";
-        }
-      } catch { /* keep polling on transient errors */ }
-    }, 5000);
-  }
-</script>
 </body>
 </html>
