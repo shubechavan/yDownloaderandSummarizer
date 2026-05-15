@@ -275,7 +275,7 @@
 
     /* ── Summary ── */
     .summary-wrap {
-      padding: 20px;
+      padding: 24px;
       flex: 1;
       overflow-y: auto;
       scrollbar-width: thin;
@@ -284,24 +284,32 @@
     .summary-wrap::-webkit-scrollbar { width: 5px; }
     .summary-wrap::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
 
-    .insight-card {
-      display: flex;
-      gap: 14px;
-      align-items: flex-start;
-      padding: 13px 16px;
-      margin-bottom: 10px;
-      border-radius: 13px;
-      border-left: 3px solid;
-      background: rgba(255,255,255,.025);
+    .summary-paragraph {
+      font-size: 14px;
+      color: #c9d1d9;
+      line-height: 1.85;
+      margin-bottom: 16px;
       opacity: 0;
-      animation: slideFade .45s ease forwards;
+      animation: fadeIn .5s ease forwards;
+    }
+    .summary-paragraph:last-child { margin-bottom: 0; }
+    .summary-paragraph::first-letter {
+      font-size: 1.5em;
+      font-weight: 700;
+      color: #58a6ff;
+      float: left;
+      line-height: 1;
+      margin-right: 4px;
+      margin-top: 2px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
     @keyframes slideFade {
       from { opacity: 0; transform: translateX(18px); }
       to   { opacity: 1; transform: translateX(0); }
     }
-    .insight-num { font-size: 22px; font-weight: 700; line-height: 1; flex-shrink: 0; min-width: 28px; }
-    .insight-text { font-size: 13px; color: #c9d1d9; line-height: 1.75; }
 
     /* ── Chapters ── */
     .chapters-section {
@@ -424,8 +432,8 @@
           </svg>
         </div>
         <div>
-          <div class="panel-title">Key Insights</div>
-          <div class="panel-sub">AI-written bullet summary</div>
+          <div class="panel-title">Video Summary</div>
+          <div class="panel-sub">AI narrative — intent, actions &amp; meaning</div>
         </div>
       </div>
       <div class="summary-wrap" id="summaryContainer"></div>
@@ -606,16 +614,14 @@
 
   function renderSummary(summary) {
     const el = document.getElementById("summaryContainer");
-    if (!summary.length) {
+    if (!summary || !summary.trim()) {
       el.innerHTML = '<p style="color:#8b949e;font-size:13px;padding:8px 0">No summary could be generated for this video.</p>';
       return;
     }
-    el.innerHTML = summary.map((s, i) =>
-      `<div class="insight-card"
-            style="border-left-color:${CARD_COLORS[i % CARD_COLORS.length]};animation-delay:${i * 0.09}s">
-         <span class="insight-num" style="color:${CARD_COLORS[i % CARD_COLORS.length]}">${i + 1}</span>
-         <span class="insight-text">${esc(s)}</span>
-       </div>`
+    // Split into paragraphs on double newline or single newline
+    const paras = summary.split(/\n\n|\n/).map(p => p.trim()).filter(p => p.length > 0);
+    el.innerHTML = paras.map((p, i) =>
+      `<p class="summary-paragraph" style="animation-delay:${i * 0.15}s">${esc(p)}</p>`
     ).join("");
   }
 
