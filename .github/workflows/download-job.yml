@@ -44,6 +44,7 @@ jobs:
           if [ "$DOWNLOAD_TYPE" = "audio" ]; then
             yt-dlp -x --audio-format mp3 --audio-quality 0 \
               --no-playlist --no-warnings \
+              --extractor-args "youtube:player_client=web,default" \
               $COOKIES_ARG \
               -o "media.%(ext)s" "$VIDEO_URL" 2>&1 | tee /tmp/ytdlp-stderr.txt; test ${PIPESTATUS[0]} -eq 0
             FILE=$(ls media.* 2>/dev/null | head -1)
@@ -54,6 +55,7 @@ jobs:
               -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best" \
               --merge-output-format mp4 \
               --no-playlist --no-warnings \
+              --extractor-args "youtube:player_client=web,default" \
               $COOKIES_ARG \
               -o "media.%(ext)s" "$VIDEO_URL" 2>&1 | tee /tmp/ytdlp-stderr.txt; test ${PIPESTATUS[0]} -eq 0
             # yt-dlp may produce .webm or .mkv if mp4 streams unavailable
